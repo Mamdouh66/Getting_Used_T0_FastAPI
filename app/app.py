@@ -1,46 +1,32 @@
-from fastapi import FastAPI
-
+from fastapi import FastAPI, Depends
+from . import schemas, models
+from .database import engine, SessionLocal
+from sqlalchemy.orm import Session
 app = FastAPI()
+    
+models.Base.metadata.create_all(engine)
 
-@app.get('/', tags= ['Root'])
-async def root() -> dict:
-    return {'message' : 'Hello World'}
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
+@app.post('/blog')
+async def create_blog(request: schemas.Blog, db: Session = Depends(get_db)):
+    new_blog = models.Blog(title = request.title, body = request.body)
+    db.add(new_blog)
+    db.commit()
+    db.refresh(new_blog)
+    return new_blog
 
-@app.get('/todo', tags=['todos'])
-async def get_todo() -> dict:
-    return {'data': todos}
+@app.get('/blog')
+async def get_blogs(db: Session = Depends(get_db)):
+    blogs = db.query(models.Blog).all()
+    return blogs
 
-@app.post('/todo', tags = ['todos'])
-async def add_todo(todo:dict) -> dict:
-    todos.append(todo)
-    return {'data' : 'todo added successfully'}
-
-@app.put('/todo/{id}', tags= ['todos'])
-async def update_todo(id: int, body: dict) -> dict:
-    for todo in todos:
-        if int((todo['id'])) == id:
-            todo['Activity'] = body['Activity']
-            return {'data' : f'todo with {id} has been updated successfully'}
-        
-    return {'data' : f'todo with {id} not found'}
-         
-@app.delete('/todo/{id}', tags= ['todos'])
-async def delete_todo (id: int) -> dict:
-    for todo in todos:
-        if int((todo['id'])) == id:
-            todos.remove(todo)
-            return {'data' : f'todo with {id} has been deleted successfully'}
-        
-    return {'data' : f'todo with {id} not found'}
-
-todos = [
-    {
-     "id" : 1,
-     "Activity" : "Go to class"   
-    }, 
-    {
-     "id" : 2,
-     "Activity" : "Meet with Ali"   
-    }
-]  
+@app.get('/blog/{id}')
+async def get_blog(id, db: Session = Depends(get_db)):
+    blog = db.query(models.Blog).filter(models.Blog.id == id).first()
+    return blog
